@@ -1,14 +1,15 @@
 use super::*;
 use crate::{common, CursorDupSort};
 use bytes::Bytes;
+use ethereum_interfaces::db::*;
 use std::io::Write;
 
 #[async_trait(?Send)]
-impl ChangeSetTable for tables::StorageChangeSet {
+impl ChangeSetTable for StorageChangeSet {
     const TEMPLATE: &'static str = "st-ind-";
 
     type Key = [u8; common::ADDRESS_LENGTH + common::INCARNATION_LENGTH + common::HASH_LENGTH];
-    type IndexTable = tables::StorageHistory;
+    type IndexTable = StorageHistory;
     type EncodedStream<'tx: 'cs, 'cs> = impl EncodedStream<'tx, 'cs>;
 
     async fn find<'tx, C>(
@@ -67,37 +68,36 @@ impl ChangeSetTable for tables::StorageChangeSet {
     }
 }
 
-impl tables::StorageChangeSet {
-    pub async fn find_with_incarnation<'tx, C>(
-        c: &mut C,
-        block_number: u64,
-        k: &[u8],
-    ) -> anyhow::Result<Option<Bytes<'tx>>>
-    where
-        C: CursorDupSort<'tx, tables::StorageChangeSet>,
-    {
-        do_search_2(
-            c,
-            block_number,
-            common::Address::from_slice(&k[..common::ADDRESS_LENGTH]),
-            &k[common::ADDRESS_LENGTH + common::INCARNATION_LENGTH
-                ..common::ADDRESS_LENGTH + common::INCARNATION_LENGTH + common::HASH_LENGTH],
-            u64::from_be_bytes(*array_ref!(&k[common::ADDRESS_LENGTH..], 0, 8)),
-        )
-        .await
-    }
+pub async fn find_with_incarnation<'tx, C>(
+    c: &mut C,
+    block_number: u64,
+    k: &[u8],
+) -> anyhow::Result<Option<Bytes<'tx>>>
+where
+    C: CursorDupSort<'tx, StorageChangeSet>,
+{
+    do_search_2(
+        c,
+        block_number,
+        common::Address::from_slice(&k[..common::ADDRESS_LENGTH]),
+        &k[common::ADDRESS_LENGTH + common::INCARNATION_LENGTH
+            ..common::ADDRESS_LENGTH + common::INCARNATION_LENGTH + common::HASH_LENGTH],
+        u64::from_be_bytes(*array_ref!(&k[common::ADDRESS_LENGTH..], 0, 8)),
+    )
+    .await
+}
 
-    pub async fn find_without_incarnation<'tx, C>(
-        c: &mut C,
-        block_number: u64,
-        address_to_find: common::Address,
-        key_to_find: &[u8],
-    ) -> anyhow::Result<Option<Bytes<'tx>>>
-    where
-        C: CursorDupSort<'tx, tables::StorageChangeSet>,
-    {
-        do_search_2(c, block_number, address_to_find, key_to_find, 0).await
-    }
+#[allow(dead_code)]
+pub async fn find_without_incarnation<'tx, C>(
+    c: &mut C,
+    block_number: u64,
+    address_to_find: common::Address,
+    key_to_find: &[u8],
+) -> anyhow::Result<Option<Bytes<'tx>>>
+where
+    C: CursorDupSort<'tx, StorageChangeSet>,
+{
+    do_search_2(c, block_number, address_to_find, key_to_find, 0).await
 }
 
 pub async fn do_search_2<'tx, C>(
@@ -108,7 +108,7 @@ pub async fn do_search_2<'tx, C>(
     incarnation: u64,
 ) -> anyhow::Result<Option<Bytes<'tx>>>
 where
-    C: CursorDupSort<'tx, tables::StorageChangeSet>,
+    C: CursorDupSort<'tx, StorageChangeSet>,
 {
     if incarnation == 0 {
         let mut seek = vec![0; common::BLOCK_NUMBER_LENGTH + common::ADDRESS_LENGTH];
@@ -122,7 +122,7 @@ where
             .unwrap();
         let mut b = c.seek(&*seek).await?;
         while let Some((k, v)) = b {
-            let (_, k1, v1) = tables::StorageChangeSet::decode(k, v);
+            let (_, k1, v1) = StorageChangeSet::decode(k, v);
             if !k1.starts_with(address_to_find.as_bytes()) {
                 break;
             }
@@ -150,7 +150,7 @@ where
 
     if let Some(v) = c.seek_both_range(&seek, key_bytes_to_find).await? {
         if v.starts_with(key_bytes_to_find) {
-            let (_, _, v) = tables::StorageChangeSet::decode(seek.into(), v);
+            let (_, _, v) = StorageChangeSet::decode(seek.into(), v);
 
             return Ok(Some(v));
         }
@@ -170,7 +170,7 @@ mod tests {
     use futures_core::Future;
     use hex_literal::hex;
 
-    type Table = tables::StorageChangeSet;
+    type Table = StorageChangeSet;
 
     const NUM_OF_CHANGES: &[usize] = &[1, 3, 10, 100];
 
@@ -319,7 +319,7 @@ mod tests {
             for v in ch {
                 assert_eq!(
                     v.value,
-                    Table::find_with_incarnation(&mut c, 1, &v.key)
+                    find_with_incarnation(&mut c, 1, &v.key)
                         .await
                         .unwrap()
                         .unwrap()
@@ -371,7 +371,7 @@ mod tests {
 
             for v in ch {
                 let (addr, _, key) = dbutils::plain_parse_composite_storage_key(&v.key);
-                let value = Table::find_without_incarnation(&mut c, 1, addr, key.as_bytes())
+                let value = find_without_incarnation(&mut c, 1, addr, key.as_bytes())
                     .await
                     .unwrap()
                     .unwrap();
@@ -489,7 +489,7 @@ mod tests {
         }
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_a, 2, key1),
@@ -501,7 +501,7 @@ mod tests {
         );
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_b, 1, key3)
@@ -513,7 +513,7 @@ mod tests {
         );
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_a, 1, key5)
@@ -525,7 +525,7 @@ mod tests {
         );
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_a, 1, key1)
@@ -536,7 +536,7 @@ mod tests {
         );
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_d, 2, key1)
@@ -547,7 +547,7 @@ mod tests {
         );
 
         assert_eq!(
-            Table::find_with_incarnation(
+            find_with_incarnation(
                 &mut cs,
                 1,
                 &dbutils::plain_generate_composite_storage_key(contract_b, 1, key7)

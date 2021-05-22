@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::{collections::BTreeSet, fmt::Debug};
 
-mod account;
-mod storage;
+pub mod account;
+pub mod storage;
 
 pub trait EncodedStream<'tx, 'cs> = Iterator<Item = (Bytes<'tx>, Bytes<'tx>)> + 'cs;
 

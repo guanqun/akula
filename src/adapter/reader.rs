@@ -1,9 +1,9 @@
-use std::marker::PhantomData;
-
-use crate::{common, dbutils, models::*, tables::*, Transaction};
+use crate::{common, dbutils, models::*, Transaction};
 use bytes::Bytes;
 use dbutils::plain_generate_composite_storage_key;
+use ethereum_interfaces::db::*;
 use ethereum_types::Address;
+use std::marker::PhantomData;
 
 pub struct StateReader<'db: 'tx, 'tx, Tx: Transaction<'db> + ?Sized> {
     block_nr: u64,

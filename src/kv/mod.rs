@@ -5,6 +5,7 @@ pub mod traits;
 use ::mdbx::{Geometry, WriteMap};
 use async_trait::async_trait;
 use byte_unit::n_mb_bytes;
+use ethereum_interfaces::db::*;
 
 pub struct MemoryKv {
     inner: mdbx::Environment<WriteMap>,
@@ -32,14 +33,14 @@ impl traits::MutableKV for MemoryKv {
 pub fn new_mem_database() -> anyhow::Result<impl traits::MutableKV> {
     let tmpdir = tempfile::tempdir()?;
     let mut builder = ::mdbx::GenericEnvironment::<WriteMap>::new();
-    builder.set_max_dbs(crate::tables::TABLE_MAP.len());
+    builder.set_max_dbs(TABLE_MAP.len());
     builder.set_geometry(Geometry {
         size: Some(0..n_mb_bytes!(64) as usize),
         growth_step: None,
         shrink_threshold: None,
         page_size: None,
     });
-    let inner = mdbx::Environment::open_rw(builder, tmpdir.path(), &crate::tables::TABLE_MAP)?;
+    let inner = mdbx::Environment::open_rw(builder, tmpdir.path(), &TABLE_MAP)?;
 
     Ok(MemoryKv {
         inner,

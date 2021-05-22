@@ -1,12 +1,10 @@
 use self::kv_client::*;
-use crate::{
-    dbutils::{DupSort, Table},
-    kv::traits,
-};
+use crate::kv::traits;
 use anyhow::Context;
 use async_stream::stream;
 use async_trait::async_trait;
 use bytes::Bytes;
+pub use ethereum_interfaces::{db::*, remotekv::*};
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::{
     mpsc::{channel, Sender},
@@ -16,8 +14,6 @@ use tokio::sync::{
 use tokio_stream::StreamExt;
 use tonic::{body::BoxBody, client::GrpcService, codegen::HttpBody, Streaming};
 use tracing::*;
-
-pub use ethereum_interfaces::remotekv::*;
 
 /// Remote transaction type via gRPC interface.
 #[derive(Debug)]

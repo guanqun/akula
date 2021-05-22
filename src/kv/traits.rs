@@ -1,12 +1,10 @@
-use std::fmt::Debug;
-
-use crate::dbutils;
 use arrayref::array_ref;
 use async_trait::async_trait;
 use bytes::Bytes;
-use dbutils::{DupSort, Table};
+use ethereum_interfaces::db::*;
 use ethereum_types::Address;
 use futures_core::stream::LocalBoxStream;
+use std::fmt::Debug;
 
 #[async_trait(?Send)]
 pub trait KV: 'static {

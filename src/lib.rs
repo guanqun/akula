@@ -26,7 +26,7 @@ mod state;
 pub mod txdb;
 
 pub use changeset::ChangeSet;
-pub use dbutils::{tables, DupSort, Table};
+pub use ethereum_interfaces::db::*;
 pub use kv::{
     mdbx::*,
     new_mem_database,
@@ -35,5 +35,5 @@ pub use kv::{
         Cursor, CursorDupSort, MutableCursor, MutableCursorDupSort, MutableTransaction, Transaction,
     },
 };
-pub use stagedsync::stages::SyncStage;
+pub use stagedsync::stages::StageId;
 pub use state::*;

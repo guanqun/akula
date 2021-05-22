@@ -1,18 +1,13 @@
-use std::{collections::HashMap, ops::Deref, path::Path};
-
-use crate::{
-    kv::traits,
-    tables::{self, AutoDupSort, AUTO_DUP_SORT, DUPSORT_TABLES},
-    Cursor, CursorDupSort, DupSort, MutableCursor, MutableCursorDupSort, Table,
-};
+use crate::{kv::traits, Cursor, CursorDupSort, MutableCursor, MutableCursorDupSort};
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
+use ethereum_interfaces::db::*;
 use mdbx::{
     Cursor as MdbxCursor, DatabaseFlags, EnvironmentKind, Error as MdbxError,
     Transaction as MdbxTransaction, TransactionKind, WriteFlags, RO, RW,
 };
-use tables::TABLE_MAP;
+use std::{collections::HashMap, ops::Deref, path::Path};
 
 pub fn table_sizes<K, E>(tx: &mdbx::Transaction<K, E>) -> anyhow::Result<HashMap<&'static str, u64>>
 where
@@ -20,7 +15,7 @@ where
     E: mdbx::EnvironmentKind,
 {
     let mut out = HashMap::new();
-    for (table, _) in TABLE_MAP.iter() {
+    for table in TABLE_MAP.keys() {
         let st = tx
             .open_db(Some(table))
             .with_context(|| format!("failed to open table: {}", table))?
@@ -173,7 +168,11 @@ impl<'env, E: EnvironmentKind> traits::MutableTransaction<'env> for MdbxTransact
     }
 
     async fn set<T: Table>(&self, k: &[u8], v: &[u8]) -> anyhow::Result<()> {
-        if AUTO_DUP_SORT.contains_key(T::DB_NAME) {
+        if DUP_SORT_TABLES
+            .get(T::DB_NAME)
+            .and_then(|dup| dup.as_ref())
+            .is_some()
+        {
             return MutableCursor::<T>::put(&mut self.mutable_cursor::<T>().await?, k, v).await;
         }
         Ok(self
@@ -245,7 +244,9 @@ fn seek_autodupsort<'txn, K: TransactionKind>(
 fn auto_dup_sort_from_db<'txn, T: Table>(
     (mut k, mut v): (Bytes<'txn>, Bytes<'txn>),
 ) -> (Bytes<'txn>, Bytes<'txn>) {
-    if let Some(&AutoDupSort { from, to }) = AUTO_DUP_SORT.get(T::DB_NAME) {
+    if let Some(&AutoDupSort { from, to }) =
+        DUP_SORT_TABLES.get(T::DB_NAME).and_then(|dup| dup.as_ref())
+    {
         if k.len() == to {
             let key_part = from - to;
             k = k[..].iter().chain(&v[..key_part]).copied().collect();
@@ -267,8 +268,8 @@ where
     }
 
     async fn seek(&mut self, key: &[u8]) -> anyhow::Result<Option<(Bytes<'txn>, Bytes<'txn>)>> {
-        if let Some(info) = AUTO_DUP_SORT.get(T::DB_NAME) {
-            return seek_autodupsort(self, info, key);
+        if let Some(info) = DUP_SORT_TABLES.get(T::DB_NAME).and_then(|dup| dup.as_ref()) {
+            return seek_autodupsort(self, &info, key);
         }
 
         Ok(if key.is_empty() {
@@ -282,7 +283,9 @@ where
         &mut self,
         key: &[u8],
     ) -> anyhow::Result<Option<(Bytes<'txn>, Bytes<'txn>)>> {
-        if let Some(&AutoDupSort { from, to }) = AUTO_DUP_SORT.get(T::DB_NAME) {
+        if let Some(&AutoDupSort { from, to }) =
+            DUP_SORT_TABLES.get(T::DB_NAME).and_then(|dup| dup.as_ref())
+        {
             return Ok(self.get_both_range(&key[..to], &key[to..])?.and_then(|v| {
                 (key[to..] == v[..from - to])
                     .then(move || (key[..to].to_vec().into(), v.slice(from - to..)))
@@ -430,8 +433,8 @@ where
             bail!("Key must not be empty");
         }
 
-        if let Some(info) = AUTO_DUP_SORT.get(T::DB_NAME) {
-            return put_autodupsort(self, info, key, value);
+        if let Some(info) = DUP_SORT_TABLES.get(T::DB_NAME).and_then(|dup| dup.as_ref()) {
+            return put_autodupsort(self, &info, key, value);
         }
 
         Ok(MdbxCursor::put(self, key, value, WriteFlags::default())?)
@@ -442,11 +445,11 @@ where
     }
 
     async fn delete(&mut self, key: &[u8], value: &[u8]) -> anyhow::Result<()> {
-        if let Some(info) = AUTO_DUP_SORT.get(T::DB_NAME) {
-            return delete_autodupsort(self, info, key);
+        if let Some(info) = DUP_SORT_TABLES.get(T::DB_NAME).and_then(|dup| dup.as_ref()) {
+            return delete_autodupsort(self, &info, key);
         }
 
-        if DUPSORT_TABLES.contains(&T::DB_NAME) {
+        if DUP_SORT_TABLES.contains_key(&T::DB_NAME) {
             if self.get_both(key, value)?.is_some() {
                 MdbxCursor::del(self, WriteFlags::CURRENT)?;
             }

@@ -1,4 +1,4 @@
-use super::stages::SyncStage;
+use super::stages::StageId;
 use crate::{MutableTransaction, Transaction};
 use async_trait::async_trait;
 
@@ -12,7 +12,7 @@ pub trait Unwinder {
 }
 
 pub struct UnwindState {
-    pub stage: SyncStage,
+    pub stage: StageId,
     pub unwind_point: u64,
 }
 
@@ -32,7 +32,7 @@ impl PersistentUnwindStack {
     pub async fn add_from_db<'db, Tx: Transaction<'db>>(
         &mut self,
         tx: &Tx,
-        stage_id: SyncStage,
+        stage_id: StageId,
     ) -> anyhow::Result<()> {
         if let Some(u) = Self::load_from_db(tx, stage_id).await? {
             self.unwind_stack.push(u);
@@ -43,7 +43,7 @@ impl PersistentUnwindStack {
 
     pub async fn load_from_db<'db, Tx: Transaction<'db>>(
         tx: &Tx,
-        stage: SyncStage,
+        stage: StageId,
     ) -> anyhow::Result<Option<UnwindState>> {
         Ok(stage.get_unwind(tx).await?.and_then(|unwind_point| {
             (unwind_point > 0).then_some(UnwindState {

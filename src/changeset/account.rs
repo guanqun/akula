@@ -1,11 +1,11 @@
 pub use super::*;
 
 #[async_trait(?Send)]
-impl ChangeSetTable for tables::AccountChangeSet {
+impl ChangeSetTable for AccountChangeSet {
     const TEMPLATE: &'static str = "acc-ind-";
 
     type Key = common::Address;
-    type IndexTable = tables::AccountsHistory;
+    type IndexTable = AccountHistory;
     type EncodedStream<'tx: 'cs, 'cs> = impl EncodedStream<'tx, 'cs>;
 
     async fn find<'tx, C>(
@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn account_encoding() {
-        type Table = tables::AccountChangeSet;
+        type Table = AccountChangeSet;
 
         let mut ch = ChangeSet::default();
 

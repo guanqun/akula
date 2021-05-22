@@ -1,4 +1,4 @@
-use crate::{dbutils::*, Cursor};
+use crate::{dbutils::*, Cursor, Table};
 use async_stream::try_stream;
 use bytes::Bytes;
 use tokio_stream::Stream;

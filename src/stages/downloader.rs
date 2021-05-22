@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::{
     stagedsync::stage::{ExecOutput, Stage, StageInput},
-    MutableTransaction, SyncStage,
+    MutableTransaction, StageId,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -17,8 +17,8 @@ impl<'db, RwTx> Stage<'db, RwTx> for HeaderDownload
 where
     RwTx: MutableTransaction<'db>,
 {
-    fn id(&self) -> SyncStage {
-        SyncStage("HeaderDownload")
+    fn id(&self) -> StageId {
+        StageId("HeaderDownload")
     }
 
     fn description(&self) -> &'static str {
